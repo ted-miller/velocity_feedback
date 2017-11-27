@@ -326,6 +326,75 @@ BOOL Ros_CtrlGroup_GetFBPulsePos(CtrlGroup* ctrlGroup, long pulsePos[MAX_PULSE_A
 }
 
 //-------------------------------------------------------------------
+// Get the corrected feedback pulse speed in pulse for each axis.
+//-------------------------------------------------------------------
+BOOL Ros_CtrlGroup_GetFBServoSpeed(CtrlGroup* ctrlGroup, long pulseSpeed[MAX_PULSE_AXES])
+{
+	LONG status = 0;
+	MP_CTRL_GRP_SEND_DATA sData;
+#ifndef DUMMY_SERVO_MODE
+	MP_FB_SPEED_RSP_DATA pulse_data;
+#else
+	MP_SERVO_SPEED_RSP_DATA pulse_data;
+#endif
+	int i;
+
+	memset(pulseSpeed, 0, sizeof(pulseSpeed));  // clear result, in case of error
+
+	// Set the control group
+	switch (ctrlGroup->groupId)
+	{
+	case MP_R1_GID: sData.sCtrlGrp = 0; break;
+	case MP_R2_GID: sData.sCtrlGrp = 1; break;
+	case MP_R3_GID: sData.sCtrlGrp = 2; break;
+	case MP_R4_GID: sData.sCtrlGrp = 3; break;
+	case MP_B1_GID: sData.sCtrlGrp = 8; break;
+	case MP_B2_GID: sData.sCtrlGrp = 9; break;
+	case MP_B3_GID: sData.sCtrlGrp = 10; break;
+	case MP_B4_GID: sData.sCtrlGrp = 11; break;
+	case MP_S1_GID: sData.sCtrlGrp = 16; break;
+	case MP_S2_GID: sData.sCtrlGrp = 17; break;
+	case MP_S3_GID: sData.sCtrlGrp = 18; break;
+	default:
+		printf("Failed to get pulse feedback speed\nInvalid groupId: %d\n", ctrlGroup->groupId);
+		return FALSE;
+	}
+
+#ifndef DUMMY_SERVO_MODE
+	// get raw (uncorrected/unscaled) joint speeds
+	status = mpGetFBSpeed(&sData, &pulse_data);
+	if (0 != status)
+	{
+		printf("Failed to get pulse feedback speed: %u\n", status);
+		return FALSE;
+	}
+
+	// Apply correction to account for cross-axis coupling.
+	// Note: This is only required for feedback.
+	// Controller handles this correction internally when 
+	// dealing with command positon.
+	for (i = 0; i<MAX_PULSE_AXES; ++i)
+	{
+		FB_AXIS_CORRECTION *corr = &ctrlGroup->correctionData.correction[i];
+		if (corr->bValid)
+		{
+			int src_axis = corr->ulSourceAxis;
+			int dest_axis = corr->ulCorrectionAxis;
+			pulse_data.lSpeed[dest_axis] -= (int)(pulse_data.lSpeed[src_axis] * corr->fCorrectionRatio);
+		}
+	}
+#else
+	mpGetServoSpeed(&sData, &pulse_data);
+#endif
+
+	// assign return value
+	for (i = 0; i<MAX_PULSE_AXES; ++i)
+		pulseSpeed[i] = pulse_data.lSpeed[i];
+
+	return TRUE;
+}
+
+//-------------------------------------------------------------------
 // Retrieves the absolute value (Nm) of the maximum current servo torque.
 //-------------------------------------------------------------------
 BOOL Ros_CtrlGroup_GetTorque(CtrlGroup* ctrlGroup, double torqueValues[MAX_PULSE_AXES])
