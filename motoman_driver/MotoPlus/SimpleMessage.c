@@ -52,7 +52,6 @@ int Ros_SimpleMsg_JointFeedback(CtrlGroup* ctrlGroup, SimpleMsg* sendMsg)
 {
 	int bRet;
 	long pulsePos[MAX_PULSE_AXES];
-	long pulseSpeed[MAX_PULSE_AXES];
 	
 	//initialize memory
 	memset(sendMsg, 0x00, sizeof(SimpleMsg));
@@ -67,21 +66,21 @@ int Ros_SimpleMsg_JointFeedback(CtrlGroup* ctrlGroup, SimpleMsg* sendMsg)
 	
 	// set body
 	sendMsg->body.jointFeedback.groupNo = ctrlGroup->groupNo;
-	sendMsg->body.jointFeedback.validFields = Valid_Position;
+	sendMsg->body.jointFeedback.validFields = 2;
 	
-	//feedback position
 	bRet = Ros_CtrlGroup_GetFBPulsePos(ctrlGroup, pulsePos);
 	if(bRet!=TRUE)
-		return 0;				
+		return 0;
+				
 	Ros_CtrlGroup_ConvertToRosPos(ctrlGroup, pulsePos, sendMsg->body.jointFeedback.pos);
 
-	//servo speed
-	bRet = Ros_CtrlGroup_GetFBServoSpeed(ctrlGroup, pulseSpeed);
-	if (bRet == TRUE)
-	{
-		Ros_CtrlGroup_ConvertToRosPos(ctrlGroup, pulseSpeed, sendMsg->body.jointFeedback.vel);
-		sendMsg->body.jointFeedback.validFields |= Valid_Velocity;
-	}
+	// For testing
+	//bRet = Ros_CtrlGroup_GetPulsePosCmd(ctrlGroup, pulsePos);
+	//if(bRet!=TRUE)
+	//	return 0;
+	//	
+	//Ros_CtrlGroup_ConvertToRosPos(ctrlGroup, pulsePos, sendMsg->body.jointFeedback.vel);
+	// End testing
 	
 	return(sendMsg->prefix.length + sizeof(SmPrefix));
 }
