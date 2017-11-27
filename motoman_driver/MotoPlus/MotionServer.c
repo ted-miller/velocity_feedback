@@ -1,13 +1,5 @@
 ﻿// MotionServer.c
 //
-// History:
-// 05/22/2013: Original release v.1.0.0
-// 06/05/2013: Fix for multi-arm control to prevent return -3 (Invalid group) 
-//			   when calling function mpExRcsIncrementMove.
-// 06/12/2013: Release v.1.0.1
-// June 2014:	Release v1.2.0
-//				Add support for multiple control groups.
-//				Add support for DX200 controller.
 /*
 * Software License Agreement (BSD License) 
 *
@@ -486,6 +478,7 @@ int Ros_MotionServer_JointTrajPtFullExProcess(Controller* controller, SimpleMsg*
 	SmBodyJointTrajPtFullEx* msgBody;	
 	CtrlGroup* ctrlGroup;
 	int ret, i;
+	FlagsValidFields validationFlags;
 
 	msgBody = &receiveMsg->body.jointTrajDataEx;
 
@@ -521,7 +514,8 @@ int Ros_MotionServer_JointTrajPtFullExProcess(Controller* controller, SimpleMsg*
 		}
 			
 		// Check that minimum information (time, position, velocity) is valid
-		if( (msgBody->jointTrajPtData[i].validFields & 0x07) != 0x07 )
+		validationFlags = Valid_Time | Valid_Position | Valid_Velocity;
+		if( (msgBody->jointTrajPtData[i].validFields & validationFlags) != validationFlags)
 		{
 			printf("ERROR: Validfields = %d\r\n", msgBody->jointTrajPtData[i].validFields);
 			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_DATA_INSUFFICIENT, replyMsg, msgBody->jointTrajPtData[i].groupNo);
@@ -1042,6 +1036,7 @@ int Ros_MotionServer_JointTrajDataProcess(Controller* controller, SimpleMsg* rec
 	SmBodyJointTrajPtFull* trajData;
 	CtrlGroup* ctrlGroup;
 	int ret;
+	FlagsValidFields validationFlags;
 
 	// Check if controller is able to receive incremental move and if the incremental move thread is running
 	if(!Ros_Controller_IsMotionReady(controller))
@@ -1067,7 +1062,8 @@ int Ros_MotionServer_JointTrajDataProcess(Controller* controller, SimpleMsg* rec
 	}
 	
 	// Check that minimum information (time, position, velocity) is valid
-	if( (trajData->validFields & 0x07) != 0x07 )
+	validationFlags = Valid_Time | Valid_Position | Valid_Velocity;
+	if( (trajData->validFields & validationFlags) != validationFlags)
 	{
 		printf("ERROR: Validfields = %d\r\n", trajData->validFields);
 		Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_DATA_INSUFFICIENT, replyMsg, receiveMsg->body.jointTrajData.groupNo);
