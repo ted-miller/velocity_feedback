@@ -124,6 +124,12 @@ CtrlGroup* Ros_CtrlGroup_Create(int groupNo, float interpolPeriod)
 		if (status != OK)
 			bInitOk = FALSE;
 
+		status = GP_getFeedbackSpeedMRegisterAddresses(groupNo, TRUE, &ctrlGroup->speedFeedbackRegisterAddress);
+		if (status != OK)
+		{
+			ctrlGroup->speedFeedbackRegisterAddress.bFeedbackSpeedEnabled = FALSE;
+		}
+
 		ctrlGroup->bIsBaxisSlave = (numAxes == 5) && slaveAxis;
 
 		//adjust the axisType field to account for robots with non-contiguous axes (such as delta or palletizing which use SLU--T axes)
@@ -330,43 +336,43 @@ BOOL Ros_CtrlGroup_GetFBPulsePos(CtrlGroup* ctrlGroup, long pulsePos[MAX_PULSE_A
 //-------------------------------------------------------------------
 BOOL Ros_CtrlGroup_GetFBServoSpeed(CtrlGroup* ctrlGroup, long pulseSpeed[MAX_PULSE_AXES])
 {
-	LONG status = 0;
-	MP_CTRL_GRP_SEND_DATA sData;
-#ifndef DUMMY_SERVO_MODE
-	MP_FB_SPEED_RSP_DATA pulse_data;
-#else
-	MP_SERVO_SPEED_RSP_DATA pulse_data;
-#endif
+	LONG status;
 	int i;
+	MP_IO_INFO registerInfo[MAX_PULSE_AXES * 2]; //values are 4 bytes, which consumes 2 registers
+	USHORT registerValues[MAX_PULSE_AXES * 2];
+	UINT32 registerValuesLong[MAX_PULSE_AXES * 2];
 
-	memset(pulseSpeed, 0, sizeof(pulseSpeed));  // clear result, in case of error
-
-	// Set the control group
-	switch (ctrlGroup->groupId)
-	{
-	case MP_R1_GID: sData.sCtrlGrp = 0; break;
-	case MP_R2_GID: sData.sCtrlGrp = 1; break;
-	case MP_R3_GID: sData.sCtrlGrp = 2; break;
-	case MP_R4_GID: sData.sCtrlGrp = 3; break;
-	case MP_B1_GID: sData.sCtrlGrp = 8; break;
-	case MP_B2_GID: sData.sCtrlGrp = 9; break;
-	case MP_B3_GID: sData.sCtrlGrp = 10; break;
-	case MP_B4_GID: sData.sCtrlGrp = 11; break;
-	case MP_S1_GID: sData.sCtrlGrp = 16; break;
-	case MP_S2_GID: sData.sCtrlGrp = 17; break;
-	case MP_S3_GID: sData.sCtrlGrp = 18; break;
-	default:
-		printf("Failed to get pulse feedback speed\nInvalid groupId: %d\n", ctrlGroup->groupId);
+	if (!ctrlGroup->speedFeedbackRegisterAddress.bFeedbackSpeedEnabled)
 		return FALSE;
+
+#ifndef DUMMY_SERVO_MODE
+	for (i = 0; i < MAX_PULSE_AXES; i += 1)
+	{
+		registerInfo[i * 2].ulAddr = ctrlGroup->speedFeedbackRegisterAddress.cioAddressForAxis[i][0];
+		registerInfo[(i * 2) + 1].ulAddr = ctrlGroup->speedFeedbackRegisterAddress.cioAddressForAxis[i][1];
 	}
 
-#ifndef DUMMY_SERVO_MODE
 	// get raw (uncorrected/unscaled) joint speeds
-	status = mpGetFBSpeed(&sData, &pulse_data);
-	if (0 != status)
+	status = mpReadIO(registerInfo, registerValues, MAX_PULSE_AXES * 2);
+	if (status != OK)
 	{
 		printf("Failed to get pulse feedback speed: %u\n", status);
 		return FALSE;
+	}
+
+	for (i = 0; i < MAX_PULSE_AXES; i += 1)
+	{
+		//move to 32 bit storage
+		registerValuesLong[i * 2] = registerValues[i * 2];
+		registerValuesLong[(i * 2) + 1] = registerValues[(i * 2) + 1];
+
+		//combine both registers into single 4 byte value (0.0001 deg/sec)
+		pulseSpeed[i] = (registerValuesLong[(i * 2) + 1] << 16) | registerValuesLong[i * 2];
+
+		//convert to pulse/sec
+		pulseSpeed[i] *= 10000; //deg/sec
+		pulseSpeed[i] *= RAD_PER_DEGREE; //rad/sec
+		pulseSpeed[i] *= ctrlGroup->pulseToRad.PtoR[i]; //pulse/sec
 	}
 
 	// Apply correction to account for cross-axis coupling.
@@ -380,16 +386,16 @@ BOOL Ros_CtrlGroup_GetFBServoSpeed(CtrlGroup* ctrlGroup, long pulseSpeed[MAX_PUL
 		{
 			int src_axis = corr->ulSourceAxis;
 			int dest_axis = corr->ulCorrectionAxis;
-			pulse_data.lSpeed[dest_axis] -= (int)(pulse_data.lSpeed[src_axis] * corr->fCorrectionRatio);
+			pulseSpeed[dest_axis] -= (int)(pulseSpeed[src_axis] * corr->fCorrectionRatio);
 		}
 	}
 #else
 	mpGetServoSpeed(&sData, &pulse_data);
-#endif
 
 	// assign return value
 	for (i = 0; i<MAX_PULSE_AXES; ++i)
 		pulseSpeed[i] = pulse_data.lSpeed[i];
+#endif
 
 	return TRUE;
 }
