@@ -341,6 +341,7 @@ BOOL Ros_CtrlGroup_GetFBServoSpeed(CtrlGroup* ctrlGroup, long pulseSpeed[MAX_PUL
 	MP_IO_INFO registerInfo[MAX_PULSE_AXES * 2]; //values are 4 bytes, which consumes 2 registers
 	USHORT registerValues[MAX_PULSE_AXES * 2];
 	UINT32 registerValuesLong[MAX_PULSE_AXES * 2];
+	double dblRegister;
 
 	if (!ctrlGroup->speedFeedbackRegisterAddress.bFeedbackSpeedEnabled)
 		return FALSE;
@@ -367,12 +368,13 @@ BOOL Ros_CtrlGroup_GetFBServoSpeed(CtrlGroup* ctrlGroup, long pulseSpeed[MAX_PUL
 		registerValuesLong[(i * 2) + 1] = registerValues[(i * 2) + 1];
 
 		//combine both registers into single 4 byte value (0.0001 deg/sec)
-		pulseSpeed[i] = (registerValuesLong[(i * 2) + 1] << 16) | registerValuesLong[i * 2];
+		dblRegister = (registerValuesLong[(i * 2) + 1] << 16) | registerValuesLong[i * 2];
 
 		//convert to pulse/sec
-		pulseSpeed[i] *= 10000; //deg/sec
-		pulseSpeed[i] *= RAD_PER_DEGREE; //rad/sec
-		pulseSpeed[i] *= ctrlGroup->pulseToRad.PtoR[i]; //pulse/sec
+		dblRegister /= 10000.0; //deg/sec
+		dblRegister *= RAD_PER_DEGREE; //rad/sec
+		dblRegister *= ctrlGroup->pulseToRad.PtoR[i]; //pulse/sec
+		pulseSpeed[i] = (long)dblRegister;
 	}
 
 	// Apply correction to account for cross-axis coupling.
