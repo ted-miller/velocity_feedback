@@ -1137,6 +1137,14 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 		Ros_MotionServer_ConvertToJointMotionData(jointTrajData, &ctrlGroup->jointMotionData);
 		ctrlGroup->timeLeftover_ms = 0;
 		ctrlGroup->q_time = ctrlGroup->jointMotionData.time;
+		
+		// For MPL80/100 robot type (SLUBT): Controller automatically moves the B-axis
+		// to maintain orientation as other axes are moved.
+		if (ctrlGroup->bIsBaxisSlave)
+		{
+			ctrlGroup->jointMotionData.pos[3] += -ctrlGroup->jointMotionData.pos[1] + ctrlGroup->jointMotionData.pos[2];
+			ctrlGroup->jointMotionData.vel[3] += -ctrlGroup->jointMotionData.vel[1] + ctrlGroup->jointMotionData.vel[2];
+		}
 
 		// Convert start position to pulse format
 		Ros_CtrlGroup_ConvertToMotoPos(ctrlGroup, ctrlGroup->jointMotionData.pos, pulsePos);
@@ -1170,15 +1178,7 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 				// excessive speed
 				return ROS_RESULT_INVALID_DATA_SPEED;
 			}
-		}
-		
-		// For MPL80/100 robot type (SLUBT): Controller automatically moves the B-axis
-		// to maintain orientation as other axes are moved.
-		if (ctrlGroup->bIsBaxisSlave)
-		{
-			ctrlGroup->jointMotionData.pos[3] += -ctrlGroup->jointMotionData.pos[1] + ctrlGroup->jointMotionData.pos[2];
-			ctrlGroup->jointMotionData.vel[3] += -ctrlGroup->jointMotionData.vel[1] + ctrlGroup->jointMotionData.vel[2];
-		}
+		}		
 
 		//printf("Trajectory Start Initialized\r\n");
 		// Return success

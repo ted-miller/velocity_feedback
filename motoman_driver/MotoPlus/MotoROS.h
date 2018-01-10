@@ -32,7 +32,7 @@
 #ifndef MOTOROS_H
 #define MOTOROS_H
 
-#define APPLICATION_VERSION					"0.0.2"
+#define APPLICATION_VERSION					"1.7.0"
 
 #include "MotoPlus.h"
 #include "ParameterExtraction.h"
